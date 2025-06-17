@@ -1,4 +1,3 @@
 streamlit
-requests
-PyMuPDF
-python-docx
+google-generativeai
+Pillow
