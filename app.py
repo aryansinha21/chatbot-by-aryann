@@ -2,16 +2,19 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 
-# --- Streamlit Page Config ---
+# Page config
 st.set_page_config(page_title="Gemini Chatbot by Aryann Sinha", page_icon="🤖")
 
-# --- Load Gemini API Key ---
+# Load API key
 genai.configure(api_key=st.secrets["api_key"])
 
-# --- Title ---
+# Initialize Gemini Pro model
+model = genai.GenerativeModel(model_name="models/gemini-pro")
+
+# Title
 st.markdown("<h1 style='text-align: center;'>🤖 Gemini Chatbot by Aryann Sinha</h1>", unsafe_allow_html=True)
 
-# --- File Upload ---
+# File upload
 uploaded_file = st.file_uploader("Upload a file (image or text)", type=["png", "jpg", "jpeg", "txt"])
 if uploaded_file:
     st.markdown(f"**Uploaded:** {uploaded_file.name}")
@@ -22,13 +25,11 @@ if uploaded_file:
         text_content = uploaded_file.read().decode("utf-8")
         st.text_area("File Content", value=text_content, height=200)
 
-# --- Gemini Pro Model ---
-model = genai.GenerativeModel("gemini-pro")
-
-# --- Chat Interface ---
+# Chat history
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+# User input
 prompt = st.chat_input("Ask me anything...")
 if prompt:
     st.chat_message("user").markdown(prompt)
@@ -42,5 +43,5 @@ if prompt:
     except Exception as e:
         st.error(f"⚠️ Error: {e}")
 
-# --- Footer ---
+# Footer
 st.markdown("<hr><p style='text-align: center;'>Made with ❤️ by <strong>Aryann Sinha</strong></p>", unsafe_allow_html=True)
