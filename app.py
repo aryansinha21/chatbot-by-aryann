@@ -1,160 +1,95 @@
 import streamlit as st
-import requests
+import os
 import fitz  # PyMuPDF
 import docx
+import tempfile
+from io import StringIO
+import requests
 
-# Streamlit page config
+# ✅ Must be the first Streamlit command
 st.set_page_config(
-    page_title="AI File Chatbot by Aryann Sinha",
-    page_icon="📚",
-    layout="centered",
+    page_title="AI Chatbot by Aryann Sinha",
+    page_icon="🤖",
+    layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Header Section
-st.markdown("""
-    <style>
-    .title {
-        text-align: center;
-        font-size: 2.5em;
-        color: #4CAF50;
-        font-weight: bold;
-    }
-    .subtitle {
-        text-align: center;
-        font-size: 1.2em;
-        margin-bottom: 30px;
-    }
-    </style>
-    <div class="title">📚 Chat With Your File</div>
-    <div class="subtitle">Upload a document and ask questions about it using AI.<br><b>Made by Aryann Sinha</b></div>
-""", unsafe_allow_html=True)
+# 💬 Title
+st.title("🤖 AI Chatbot + File Reader")
+st.caption("Made by Aryann Sinha")
 
-# Upload section
-file = st.file_uploader("📤 Upload PDF, DOCX, or TXT file", type=["pdf", "docx", "txt"])
-question = st.text_input("🧠 Ask something about the file")
+# ✅ Get API key from Streamlit secrets
+api_key = st.secrets.get("api_key", "")
 
-# Text extractor
-def extract_text(file):
-    if file.name.endswith(".pdf"):
-        doc = fitz.open(stream=file.read(), filetype="pdf")
-        return "\n".join([page.get_text() for page in doc])
-    elif file.name.endswith(".docx"):
-        doc = docx.Document(file)
-        return "\n".join([para.text for para in doc.paragraphs])
-    elif file.name.endswith(".txt"):
-        return file.read().decode("utf-8")
-    return "Unsupported file format."
+# 🔄 Normal chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# AI querying using OpenRouter API
-def query_ai(prompt):
+# ✅ Chat display
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# 📤 File upload
+uploaded_file = st.sidebar.file_uploader("Upload a file (PDF, DOCX, TXT, Image)", type=["pdf", "docx", "txt", "png", "jpg", "jpeg"])
+
+file_text = ""
+
+if uploaded_file:
+    file_type = uploaded_file.type
+    st.sidebar.write(f"File Type: `{file_type}`")
+
+    if file_type.startswith("image/"):
+        st.image(uploaded_file, caption="Uploaded Image", use_column_width=True)
+        st.sidebar.info("Image preview shown. No text to extract.")
+    elif uploaded_file.name.endswith(".pdf"):
+        with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
+            file_text = "\n".join([page.get_text() for page in doc])
+    elif uploaded_file.name.endswith(".docx"):
+        doc = docx.Document(uploaded_file)
+        file_text = "\n".join([para.text for para in doc.paragraphs])
+    elif uploaded_file.name.endswith(".txt"):
+        stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
+        file_text = stringio.read()
+
+    if file_text:
+        st.sidebar.success("Text extracted from file.")
+        st.sidebar.text_area("📄 File Content Preview", file_text, height=200)
+
+# 💬 User input
+user_input = st.chat_input("Ask something or start chatting...")
+
+# ✅ Chat logic
+if user_input:
+    st.chat_message("user").markdown(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
+
+    # 👇 Prepare prompt (with file content if available)
+    prompt = ""
+    if file_text:
+        prompt += f"Context from file:\n{file_text}\n\n"
+    prompt += f"User: {user_input}\nAI:"
+
+    # 🧠 OpenAI or OpenRouter API call
     headers = {
-        "Authorization": f"Bearer {st.secrets['api_key']}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-    data = {
-        "model": "mistralai/mistral-7b-instruct",  # or "meta-llama/llama-3-8b-instruct"
+
+    payload = {
+        "model": "openchat/openchat-3.5",  # Free model from OpenRouter
         "messages": [
-            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "system", "content": "You are a helpful AI chatbot created by Aryann Sinha."},
             {"role": "user", "content": prompt}
         ]
     }
-    response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
-    return response.json()["choices"][0]["message"]["content"]
 
-# Main Logic
-if file and question:
-    with st.spinner("Analyzing file and generating answer..."):
-        content = extract_text(file)
-        final_prompt = f"Answer based on the document content:\n\n{content}\n\nQ: {question}"
-        try:
-            answer = query_ai(final_prompt)
-            st.success(answer)
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
+    try:
+        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
+        reply = response.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        reply = f"❌ Error: {e}"
 
-# Footer
-st.markdown("""
-    <hr style="margin-top: 50px;">
-    <p style="text-align: center; font-size: 0.9em; color: gray;">© 2025 Aryann Sinha. All rights reserved.</p>
-""", unsafe_allow_html=True)
-import streamlit as st
-import requests
-import fitz  # PyMuPDF
-import docx
+    st.chat_message("assistant").markdown(reply)
+    st.session_state.messages.append({"role": "assistant", "content": reply})
 
-# Streamlit page config
-st.set_page_config(
-    page_title="AI File Chatbot by Aryann Sinha",
-    page_icon="📚",
-    layout="centered",
-    initial_sidebar_state="collapsed"
-)
-
-# Header Section
-st.markdown("""
-    <style>
-    .title {
-        text-align: center;
-        font-size: 2.5em;
-        color: #4CAF50;
-        font-weight: bold;
-    }
-    .subtitle {
-        text-align: center;
-        font-size: 1.2em;
-        margin-bottom: 30px;
-    }
-    </style>
-    <div class="title">📚 Chat With Your File</div>
-    <div class="subtitle">Upload a document and ask questions about it using AI.<br><b>Made by Aryann Sinha</b></div>
-""", unsafe_allow_html=True)
-
-# Upload section
-file = st.file_uploader("📤 Upload PDF, DOCX, or TXT file", type=["pdf", "docx", "txt"])
-question = st.text_input("🧠 Ask something about the file")
-
-# Text extractor
-def extract_text(file):
-    if file.name.endswith(".pdf"):
-        doc = fitz.open(stream=file.read(), filetype="pdf")
-        return "\n".join([page.get_text() for page in doc])
-    elif file.name.endswith(".docx"):
-        doc = docx.Document(file)
-        return "\n".join([para.text for para in doc.paragraphs])
-    elif file.name.endswith(".txt"):
-        return file.read().decode("utf-8")
-    return "Unsupported file format."
-
-# AI querying using OpenRouter API
-def query_ai(prompt):
-    headers = {
-        "Authorization": f"Bearer {st.secrets['api_key']}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": "mistralai/mistral-7b-instruct",  # or "meta-llama/llama-3-8b-instruct"
-        "messages": [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt}
-        ]
-    }
-    response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
-    return response.json()["choices"][0]["message"]["content"]
-
-# Main Logic
-if file and question:
-    with st.spinner("Analyzing file and generating answer..."):
-        content = extract_text(file)
-        final_prompt = f"Answer based on the document content:\n\n{content}\n\nQ: {question}"
-        try:
-            answer = query_ai(final_prompt)
-            st.success(answer)
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
-
-# Footer
-st.markdown("""
-    <hr style="margin-top: 50px;">
-    <p style="text-align: center; font-size: 0.9em; color: gray;">© 2025 Aryann Sinha. All rights reserved.</p>
-""", unsafe_allow_html=True)
